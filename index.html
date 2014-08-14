@@ -5,17 +5,29 @@
 		<script type="text/javascript" src="main.js"></script>
 		<style type="text/css">
             canvas { border:solid 1px black; }
+            .ga-test-canvas {
+              width:  60px;
+              height: 60px;
+            }
+            #stop-button {
+              display: none;
+            }
         </style>
 	</head>
 	<body>
 		<h1>遺伝的画像生成的な</h1>
-		<form id="img-url-form" action="#">
-			<label>画像url</label> <input type="text" id="img-url-input" />
-			<input type="submit" />
+		<form id="option-form" action="#">
+			<div><label>画像url</label> <input type="text" id="img-url-input" /></div>
+			<div><label>ポリゴン数</label> <input type="text" id="polygon-size-input" /></div>
+			<div><label>子供数</label> <input type="text" id="child-gene-input" /></div>
+			<input type="submit" id="submit-button"/>
+			<input type="button" id="stop-button" value="stop"/>
 		</form>
+
         <div id="ga-disp">
             <canvas id="ga-base" width="200" height="200"></canvas>
             <canvas id="ga-best" width="200" height="200"></canvas>
+            <canvas id="ga-gen"  width="200" height="200"></canvas>
         </div>
         <div id="ga-field"> </div>
         <div id="fitness-field">fitness: <span id="fitness-elem">0</span></div>

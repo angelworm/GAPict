@@ -1,12 +1,20 @@
+/* -*- coding: utf-8-*- */
+
 var $ = $ || function(){};
 
 var GA = {};
+
+GA.GENE_COUNT = 20;   // 一遺伝子は何個のshapeか
+GA.GENE_LENGTH = 20;  // 1shapeは何個の値で構成されるか
+GA.CHILD_MAX = 40;    // 一世代は何遺伝子か
+GA.Image = undefined;
 
 GA.Gene = function(width, height, path_count) {
     this.w = width;
     this.h = height;
     this.size = path_count || 1;
     this.gene = [];
+    this.fitness = 1;
 };
 
 GA.Gene.prototype.randomGeneGenAt = function(index) {
@@ -57,8 +65,8 @@ GA.Gene.prototype.drawGene = function(ctx) {
 
 GA.Gene.prototype.cross = function(b) {
     var ret = new GA.Gene(this.w, this.h, this.size);
-    var ia = Math.round(Math.radndom() * this.size * 20);
-    var ib = Math.round(Math.radndom() * this.size * 20);
+    var ia = Math.round(Math.random() * this.size * 20);
+    var ib = Math.round(Math.random() * this.size * 20);
     var inside_gene = b;
     
     if(ia < ib){
@@ -74,7 +82,7 @@ GA.Gene.prototype.cross = function(b) {
     var imax = Math.max(ia, ib);
 
     for(var i = imin; i < imax; i++) {
-        ret.gene[i] = b.gene[i];
+        ret.gene[i] = inside_gene.gene[i];
     }
     return ret;
 };
@@ -85,18 +93,18 @@ GA.Gene.prototype.mutate = function(b) {
     return this.cross(ret);
 };
 
-GA.testGene = function(basectx, renderctx, gene) {
+GA.Gene.prototype.test = function(basectx, renderctx) {
     renderctx.fillStyle = "#FFF";
     renderctx.fillRect(0, 0, renderctx.canvas.width, renderctx.canvas.height);
-    gene.drawGene(renderctx);
-    var base_data = basectx.getImageData(0, 0, basectx.canvas.width, basectx.canvas.height);
-    var render_data = renderctx.getImageData(0, 0, renderctx.canvas.width, renderctx.canvas.height);
+    this.drawGene(renderctx);
+    var base_data = basectx.getImageData(0, 0, basectx.canvas.width, basectx.canvas.height).data;
+    var render_data = renderctx.getImageData(0, 0, renderctx.canvas.width, renderctx.canvas.height).data;
     var fitness = 0;
     for(var i = 0; i < base_data.length; i++) {
         fitness += Math.abs(base_data[i] - render_data[i]) / 255;
     }
-    fitness = 1 - fitness / base_data.length;
-    return fitness;
+    this.fitness = 1 - fitness / base_data.length;
+    return this.fitness;
 };
 
 function initCanvas(img) {
@@ -114,30 +122,122 @@ function initCanvas(img) {
 
     $ce2.attr("width", newX);
     $ce2.attr("height", newY);
-    var gene = new GA.Gene(newX, newY, 20);
-    gene.randomGeneGen();
-    gene.drawGene($ce2.get(0).getContext('2d'));
 
-    $("#fitness-elem").text(GA.testGene($ce1.get(0).getContext('2d'),
-                                        $ce2.get(0).getContext('2d'),
-                                        gene));
+    for(var i = 0; i < GA.CHILD_MAX; i++) {
+        var $canvas = $('<canvas width="'+newX+'" height="'+newY+'" class="ga-test-canvas"/>');
+        $("#ga-field").append($canvas);
+    }
+    var seed = new GA.Gene(newX, newY, GA.GENE_COUNT);
+    seed.randomGeneGen();
+    GA.runStep([seed]);
 }
 
-function loadImg(url, canvas_e) {
+GA.selectGene = function(genes) {
+    var sum = 0;
+    var partial_sum = [];
+    for(var i = 0; i < genes.length; i++) {
+        sum += genes[i].fitness;
+        partial_sum[i] = sum;
+    }
+    var index = sum * Math.random();
+    for(i = 0; partial_sum[i] < index; i++) {
+        // n.t.d
+    }
+    return genes[i];
+};
+
+GA.runStep = function(seed_genes) {
+    var gen = [];
+    
+    seed_genes.sort(function(a, b) {
+        return b.fitness - a.fitness;
+    });
+    
+    gen[0] = seed_genes[0];
+    for(var i = 1; i < GA.CHILD_MAX; i++) {
+        var action = GA.selectGene([
+            {name:"orig", fitness: 0.05},
+            {name:"cross",fitness: 0.80},
+            {name:"mut",  fitness: 0.15}
+        ]).name;
+        switch(action) {
+        case "orig":
+            gen[i] = GA.selectGene(seed_genes);
+            break;
+        case "cross":
+            gen[i] = GA.selectGene(seed_genes).cross(GA.selectGene(seed_genes));
+            break;
+        case "mut":
+            gen[i] = GA.selectGene(seed_genes).mutate();
+            break;
+        default:
+            console.error("no action error");
+        }
+    }
+
+    console.log(gen);
+
+    var max_fitness = 0, max_fitness_index = 0;
+    var basectx = $("#ga-base").get(0).getContext('2d');
+    var bestctx = $("#ga-best").get(0).getContext('2d');
+    var $canvas_field = $(".ga-test-canvas");
+    for(i = 0; i < GA.CHILD_MAX; i++) {
+        var testctx = $canvas_field.get(i).getContext('2d');
+        var f = gen[i].test(basectx, testctx);
+        if(max_fitness < f) {
+            max_fitness = f;
+            max_fitness_index = i;
+        }        
+    }
+    gen[max_fitness_index].drawGene(bestctx);
+
+    $("#fitness-elem").text(max_fitness);
+    
+    return gen;
+};
+
+GA.run = function() {
+    var seeds = [];
+    for(var i = 0; i < 20; i++) {
+        var g = new GA.Gene(500, 515, GA.GENE_COUNT);
+        g.randomGeneGen();
+        seeds[i] = g;
+    }
+    return window.setInterval(function() {
+        seeds = GA.runStep(seeds);
+    }, 1000);
+};
+
+function loadImg(url, callback) {
     var img = new Image();
 
     img.onload = function() {
-        initCanvas(img);
+        callback(img);
     };
     img.src = url;
 }
 
 $(function() {
-	$("#img-url-form").submit(function(e){
+    var interval_id;
+
+	$("#option-form").submit(function(e){
 		console.log($("#img-url-input").val());
 
-        loadImg($("#img-url-input").val());
-        
+        GA.CHILD_MAX = $("#child-gene-input").val();
+        GA.GENE_COUNT = $("#polygon-size-input").val();
+
+        loadImg($("#img-url-input").val(), function(img) {
+            initCanvas(img);
+            $("#submit-button").hide();
+            $("#stop-button").show();
+            interval_id = GA.run();
+        });
+
         e.preventDefault();
 	});
+    $("#stop-button").click(function() {
+        $("#submit-button").show();
+        $("#stop-button").hide();
+        window.clearInterval(interval_id);
+    });
 });
